@@ -1,10 +1,11 @@
 
+import sys
 from fuzzy_potato.core import BaseStorage
 import logging
+import time
 import psycopg2
-from .sql import create_db_sql, delete_data_sql, insert_gram_sql, insert_word_sql, insert_segment_sql, begin_insert, end_insert, fuzzy_match
+from .sql import create_db_sql, delete_data_sql, insert_gram_sql, insert_word_sql, insert_segment_sql, begin_insert, end_insert, fuzzy_match_words, fuzzy_match_segments
 
-import sys
 sys.path.append('..')
 
 
@@ -46,7 +47,7 @@ class DataBaseConnector():
             self.connection.commit()
             logging.debug('Query finished successfully')
             if fetch:
-                return self.cursor.fetchall() 
+                return self.cursor.fetchall()
         except (Exception, psycopg2.DatabaseError) as error:
             logging.error('Error while running query: ' + sql)
             self.cursor.execute("ROLLBACK")
@@ -109,13 +110,28 @@ class PostgresStorage(BaseStorage):
             logging.error('Failed to save text data')
             logging.error(error)
 
-    def match_grams(self, grams):
+    def match_grams_for_words(self, grams, limit=10):
+        try:
+            start_time = time.time()
+
+            result = self.db_connector.execute_query(
+                fuzzy_match_words(grams, limit), fetch=True)
+
+            logging.info("Query executed in:  %s seconds" % (time.time() - start_time))
+            logging.info('Query matched')
+            return result
+        except Exception as error:
+            logging.error('Failed to match query')
+            logging.error(error)
+
+    def match_grams_for_segments(self, grams, limit=10):
         try:
             import time
             start_time = time.time()
-            
-            result = self.db_connector.execute_query(fuzzy_match(grams), fetch=True)
-            
+
+            result = self.db_connector.execute_query(
+                fuzzy_match_segments(grams, limit), fetch=True)
+
             print("--- %s seconds ---" % (time.time() - start_time))
 
             logging.info('Query matched')

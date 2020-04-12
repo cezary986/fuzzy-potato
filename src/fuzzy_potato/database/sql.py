@@ -18,9 +18,20 @@ create_db_sql = '''
     ALTER SEQUENCE public."Gram_id_seq" OWNED BY public.gram.id;
 
     CREATE TABLE public.segment_word (
+        id integer NOT NULL,
         segment_id integer NOT NULL,
         word_id integer NOT NULL
     );
+
+    CREATE SEQUENCE public."Segment_word_id_seq"
+        AS integer
+        START WITH 1
+        INCREMENT BY 1
+        NO MINVALUE
+        NO MAXVALUE
+        CACHE 1;
+
+    ALTER SEQUENCE public."Segment_word_id_seq" OWNED BY public.segment_word.id;
 
     CREATE SEQUENCE public."Segment_Word_segment_id_seq"
         AS integer
@@ -93,6 +104,8 @@ create_db_sql = '''
     ALTER TABLE ONLY public.segment_word ALTER COLUMN word_id SET DEFAULT nextval('public."Segment_Word_word_id_seq"'::regclass);
 
     ALTER TABLE ONLY public.word ALTER COLUMN id SET DEFAULT nextval('public."Word_id_seq"'::regclass);
+    
+    ALTER TABLE ONLY public.segment_word ALTER COLUMN id SET DEFAULT nextval('public."Segment_word_id_seq"'::regclass);
 
 '''
 
@@ -127,8 +140,10 @@ def insert_segment_sql(segment_text):
 def insert_word_sql(word_text):
     return f'''
         INSERT INTO word (word) VALUES ('{word_text.replace("'", "''")}')
-        ON CONFLICT(word) DO UPDATE SET id=EXCLUDED.id 
+        ON CONFLICT(word) DO UPDATE SET word=EXCLUDED.word 
         RETURNING id INTO new_word_id;
+
+        INSERT INTO segment_word (word_id, segment_id) VALUES (new_word_id, new_segment_id);
 
         '''
 
@@ -138,7 +153,7 @@ def insert_gram_sql(gram_text):
         
         '''
 
-def fuzzy_match(grams):
+def fuzzy_match_words(grams, limit=10):
     tmp = ''
     i = 0
     for key, gram in grams.items():
@@ -147,10 +162,36 @@ def fuzzy_match(grams):
             tmp += ', '
         i += 1
     return f'''
-        SELECT word FROM word JOIN 
-        (SELECT word_id, COUNT(word_id) FROM gram 
+        SELECT word, word_count FROM word JOIN 
+        (SELECT word_id, COUNT(word_id) as word_count FROM gram 
         WHERE gram.gram IN ({tmp})
         GROUP BY word_id) RESULTS
         ON word.id = RESULTS.word_id
+        ORDER BY word_count DESC
+        LIMIT {limit}
 
     '''
+
+def fuzzy_match_segments(grams, limit=10):
+    tmp = ''
+    i = 0
+    for key, gram in grams.items():
+        tmp += f"'{gram.text}'"
+        if i != len(grams.items()) -1:
+            tmp += ', '
+        i += 1
+    return f'''
+        SELECT * FROM segment JOIN (
+            SELECT DISTINCT  ON (segment_word.word_id) * FROM segment_word JOIN (
+                SELECT word.id as word_id, word, word_count FROM word JOIN 
+                (SELECT word_id, COUNT(word_id) as word_count FROM gram 
+                WHERE gram.gram IN ({tmp})
+                GROUP BY word_id) RESULTS
+                ON word.id = RESULTS.word_id
+                ORDER BY word_count DESC
+                LIMIT {limit}
+            ) MATCHES ON segment_word.word_id = MATCHES.word_id ORDER BY segment_word.word_id
+        ) TMP ON segment.id = TMP.segment_id
+        ORDER BY word_count DESC LIMIT {limit}
+    '''
+

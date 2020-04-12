@@ -25,22 +25,28 @@ class TestFuzzyKitten(unittest.TestCase):
 
     def test_matching(self):
         try:
+          print('Creating db tables...')
           TestFuzzyKitten.storage.setup_database()
 
+          print('Extracting text data...')
           text = None
           with open('../../data/little_woman.txt', 'r') as myfile:
             text = myfile.read()
 
           text_data = TextDataFactory.make(text)
+
+          print('Saving text data to db...')
           TestFuzzyKitten.storage.save_data(text_data)
+          # print('Db ready')
           
-          QUERY = 'Dashw'
+          print('Search for: ')
+          QUERY = input()
           query_grams = TextDataFactory._split_to_sufixes(QUERY)
-          result = TestFuzzyKitten.storage.match_grams(query_grams)
+          result = TestFuzzyKitten.storage.match_grams_for_segments(query_grams, limit=3)
           print('MATCHING: ')
           print(result)
 
-          a = input()
+
         except Exception as error:
             self.fail('Failed with error: ' + str(error))
 
