@@ -4,7 +4,7 @@ create_db_sql = '''
     CREATE TABLE public.gram (
         id integer NOT NULL,
         gram character varying NOT NULL,
-        word_id integer NOT NULL
+        UNIQUE(gram)
     );
 
     CREATE SEQUENCE public."Gram_id_seq"
@@ -16,6 +16,22 @@ create_db_sql = '''
         CACHE 1;
 
     ALTER SEQUENCE public."Gram_id_seq" OWNED BY public.gram.id;
+
+    CREATE TABLE public.gram_word (
+        id integer NOT NULL,
+        gram_id integer NOT NULL,
+        word_id integer NOT NULL
+    );
+
+    CREATE SEQUENCE public."Gram_word_id_seq"
+        AS integer
+        START WITH 1
+        INCREMENT BY 1
+        NO MINVALUE
+        NO MAXVALUE
+        CACHE 1;
+
+    ALTER SEQUENCE public."Gram_word_id_seq" OWNED BY public.gram_word.id;
 
     CREATE TABLE public.segment_word (
         id integer NOT NULL,
@@ -83,19 +99,7 @@ create_db_sql = '''
 
     ALTER SEQUENCE public."Word_id_seq" OWNED BY public.word.id;
 
-    CREATE SEQUENCE public.gram_word_id_seq
-        AS integer
-        START WITH 1
-        INCREMENT BY 1
-        NO MINVALUE
-        NO MAXVALUE
-        CACHE 1;
-
-    ALTER SEQUENCE public.gram_word_id_seq OWNED BY public.gram.word_id;
-
     ALTER TABLE ONLY public.gram ALTER COLUMN id SET DEFAULT nextval('public."Gram_id_seq"'::regclass);
-
-    ALTER TABLE ONLY public.gram ALTER COLUMN word_id SET DEFAULT nextval('public.gram_word_id_seq'::regclass);
 
     ALTER TABLE ONLY public.segment ALTER COLUMN id SET DEFAULT nextval('public."Segment_id_seq"'::regclass);
 
@@ -106,6 +110,8 @@ create_db_sql = '''
     ALTER TABLE ONLY public.word ALTER COLUMN id SET DEFAULT nextval('public."Word_id_seq"'::regclass);
     
     ALTER TABLE ONLY public.segment_word ALTER COLUMN id SET DEFAULT nextval('public."Segment_word_id_seq"'::regclass);
+        
+    ALTER TABLE ONLY public.gram_word ALTER COLUMN id SET DEFAULT nextval('public."Gram_word_id_seq"'::regclass);
 
 '''
 
@@ -114,6 +120,7 @@ delete_data_sql = '''
     DROP TABLE public.word;
     DROP TABLE public.segment;
     DROP TABLE public.segment_word;
+    DROP TABLE public.gram_word;
 '''
 
 def begin_insert():
@@ -121,6 +128,7 @@ def begin_insert():
         DO $$
         DECLARE new_segment_id integer;
         DECLARE new_word_id integer;
+        DECLARE new_gram_id integer;
 
         BEGIN
         
@@ -140,16 +148,19 @@ def insert_segment_sql(segment_text):
 def insert_word_sql(word_text):
     return f'''
         INSERT INTO word (word) VALUES ('{word_text.replace("'", "''")}')
-        ON CONFLICT(word) DO UPDATE SET word=EXCLUDED.word 
-        RETURNING id INTO new_word_id;
-
+        ON CONFLICT(word) DO NOTHING;
+        
+        SELECT id INTO new_word_id FROM word WHERE word = '{word_text.replace("'", "''")}';  
         INSERT INTO segment_word (word_id, segment_id) VALUES (new_word_id, new_segment_id);
 
         '''
 
 def insert_gram_sql(gram_text):
     return f'''
-        INSERT INTO gram (gram, word_id) VALUES ('{gram_text.replace("'", "''")}', new_word_id);
+        INSERT INTO gram (gram) VALUES ('{gram_text.replace("'", "''")}') ON CONFLICT(gram) DO NOTHING;
+        
+        SELECT id INTO new_gram_id FROM gram WHERE gram = '{gram_text.replace("'", "''")}';
+        INSERT INTO gram_word (gram_id, word_id) VALUES (new_gram_id, new_word_id);
         
         '''
 
@@ -162,36 +173,40 @@ def fuzzy_match_words(grams, limit=10):
             tmp += ', '
         i += 1
     return f'''
-        SELECT word, word_count FROM word JOIN 
-        (SELECT word_id, COUNT(word_id) as word_count FROM gram 
-        WHERE gram.gram IN ({tmp})
-        GROUP BY word_id) RESULTS
-        ON word.id = RESULTS.word_id
-        ORDER BY word_count DESC
-        LIMIT {limit}
-
+        SELECT * FROM word JOIN
+            (SELECT gram_word.word_id, COUNT(gram_word.word_id) as word_count from gram_word JOIN
+                (SELECT id from gram WHERE  gram IN ({tmp})) GRAMS
+            ON gram_word.gram_id = GRAMS.id GROUP BY gram_word.word_id ORDER BY word_count DESC LIMIT {limit}) WORDS_IDS
+        ON word.id = WORDS_IDS.word_id
     '''
 
 def fuzzy_match_segments(grams, limit=10):
+    j = 0
     tmp = ''
-    i = 0
-    for key, gram in grams.items():
-        tmp += f"'{gram.text}'"
-        if i != len(grams.items()) -1:
-            tmp += ', '
-        i += 1
-    return f'''
-        SELECT * FROM segment JOIN (
-            SELECT DISTINCT  ON (segment_word.word_id) * FROM segment_word JOIN (
-                SELECT word.id as word_id, word, word_count FROM word JOIN 
-                (SELECT word_id, COUNT(word_id) as word_count FROM gram 
-                WHERE gram.gram IN ({tmp})
-                GROUP BY word_id) RESULTS
-                ON word.id = RESULTS.word_id
-                ORDER BY word_count DESC
-                LIMIT {limit}
-            ) MATCHES ON segment_word.word_id = MATCHES.word_id ORDER BY segment_word.word_id
-        ) TMP ON segment.id = TMP.segment_id
-        ORDER BY word_count DESC LIMIT {limit}
+    for word in grams:
+        tmp += 'gram IN ('
+        i = 0
+        for key, gram in word.items():
+            tmp += f"'{gram.text}'"
+            if i != len(word.items()) -1:
+                tmp += ', '
+            i += 1
+        j += 1
+        tmp += ')'
+        if j == len(grams):
+            break
+        tmp += ' OR '
+
+    res = f'''
+       SELECT DISTINCT ON (segment.id) segment.id, segment.segment, SEGMENTS_IDS.word_text, SEGMENTS_IDS.word_id FROM segment JOIN
+           (SELECT segment_word.word_id as word_identifier, WORDS.word_text, WORDS.word_id FROM segment_word JOIN
+               (SELECT word.id, word.word as word_text, WORDS_IDS.word_id FROM word JOIN
+                    (SELECT gram_word.word_id, COUNT(gram_word.word_id) as word_count from gram_word JOIN
+                        (SELECT id from gram WHERE {tmp}) GRAMS
+                    ON gram_word.gram_id = GRAMS.id GROUP BY gram_word.word_id ORDER BY word_count DESC LIMIT {2*limit}) WORDS_IDS
+                ON word.id = WORDS_IDS.word_id) WORDS
+            ON segment_word.word_id = WORDS.word_id) SEGMENTS_IDS
+        ON segment.id = SEGMENTS_IDS.word_identifier ORDER BY segment.id
     '''
+    return res
 

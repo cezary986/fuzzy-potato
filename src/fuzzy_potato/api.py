@@ -22,21 +22,50 @@ class FuzzyPotato(object):
       text = text_file.read()
     self.index_text(text)
 
-  def _prepare_results(self, query: str, db_results):
+  def _sort_results(self, query: str, db_results):
+    for element in db_results:
+      first = True
+      print(element['words'])
+      for word in element['words'].values():
+        if not first:
+          element['match']['text'] += ' '
+        element['match']['text'] += word['text']
+        first = False
+          
+      element['match']['distance'] = levenshtein_distance(element['match']['text'], query)
+    db_results.sort(key=lambda element : element['match']['distance'])
+    return db_results
+
+  def _format_result(self, query: str, db_results):
     results = []
-    tmp = None
-    for db_result in db_results:
+    for element in db_results:
       tmp = {}
       tmp['segment'] = {}
-      tmp['segment']['id'] = db_result[0]
-      tmp['segment']['text'] = db_result[1]
-      tmp['word'] = {}
-      tmp['word']['id'] = db_result[5]
-      tmp['word']['text'] = db_result[6]
-      tmp['word']['distance'] = levenshtein_distance(db_result[6], query)
+      tmp['segment']['id'] = element[0]
+      tmp['segment']['text'] = element[1]
+      tmp['match'] = {
+        'text': '',
+        'distance': None
+      }
+      tmp['words'] = {
+        element[2]: {
+          'id': element[3],
+          'text':  element[2]
+        }
+      }
       results.append(tmp)
-    results.sort(key=lambda element : element['word']['distance'])
     return results
+
+  def _reduce_results(self, db_results):
+    results = {}
+    for element in db_results:
+      segment_id = element['segment']['id']
+      if segment_id in results:
+        results[segment_id]['words'] = {**results[segment_id]['words'], **element['words']}
+        print('reduce')
+      else:
+        results[segment_id] = element
+    return list(results.values())
 
   def _validate_query(self, query: str):
     if len(query) < 3:
@@ -46,12 +75,21 @@ class FuzzyPotato(object):
   def match_for_words(self, query: str, limit=10):
     self._validate_query(query)
     query_grams = TextDataFactory._split_to_sufixes(query)
-    result = self._storage.match_grams_for_segments(query_grams, limit=limit)
-    return self._prepare_results(query, result)
+    result = self._storage.match_grams_for_words(query_grams, limit=limit)
+    result = self._format_result(query, result)
+    return self._sort_results(query, result)
 
   def match_for_segments(self, query: str, limit=10):
-    self._validate_query(query)
-    query_grams = TextDataFactory._split_to_sufixes(query)
-    result = self._storage.match_grams_for_segments(query_grams, limit=limit)
-    return self._prepare_results(query, result)
-    
+    query_words = query.split(' ')
+    results = []
+    sufixes = []
+    for query_word in query_words:
+      if len(query_word) < 3:
+        continue
+      else:
+        sufixes.append(TextDataFactory._split_to_sufixes(query_word))
+
+    results = self._storage.match_grams_for_segments(sufixes, limit=limit)
+    results = self._format_result(query, results)
+    results = self._reduce_results(results)
+    return self._sort_results(query, results)

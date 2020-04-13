@@ -18,10 +18,10 @@ class TestFuzzyKitten(unittest.TestCase):
             'database_name': 'fuzzy_kitten_test'
         })
 
-    # @classmethod
-    # def tearDownClass(cls):
-    #     TestFuzzyKitten.storage.drop_database()
-    #     TestFuzzyKitten.storage.finish()
+    @classmethod
+    def tearDownClass(cls):
+        TestFuzzyKitten.storage.drop_database()
+        TestFuzzyKitten.storage.finish()
 
     def test_matching(self):
         try:

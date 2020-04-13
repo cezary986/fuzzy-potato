@@ -13,7 +13,6 @@ class TextDataFactory(object):
     @classmethod
     def _get_segments(clss, text):
         segments = sent_tokenize(text)
-        last_segment = segments[len(segments) - 1]
         segments_data = []
         for segment_text in segments:
             segments_data.append(SegmentData(segment_text))
@@ -35,9 +34,14 @@ class TextDataFactory(object):
         index_from = 0
         grams_data = {}
         for char in word_text:
-            if (index_from + SUFIX_LENGTH > len(word_text)):
+            gram_text = ''
+            if index_from + SUFIX_LENGTH <= len(word_text):
+                gram_text = word_text[index_from: index_from + SUFIX_LENGTH]
+            if index_from + SUFIX_LENGTH - len(word_text) == 1:
+                # last sufix is only two chars long with additional special char
+                gram_text = word_text[index_from: index_from + SUFIX_LENGTH] + '#'
+            if index_from + SUFIX_LENGTH - len(word_text) > 1:
                 break
-            gram_text = word_text[index_from: index_from + SUFIX_LENGTH]
             grams_data[gram_text] = GramData(gram_text)
             index_from = index_from + 1
         return grams_data
