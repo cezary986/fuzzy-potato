@@ -4,7 +4,8 @@ from fuzzy_potato.core import BaseStorage
 import logging
 import time
 import psycopg2
-from .sql import create_db_sql, delete_data_sql, insert_gram_sql, insert_word_sql, insert_segment_sql, begin_insert, end_insert, fuzzy_match_words, fuzzy_match_segments
+from .sql import create_db_sql, delete_data_sql, insert_gram_sql, insert_word_sql, insert_segment_sql, begin_insert, \
+    end_insert, fuzzy_match_words, fuzzy_match_segments, get_db_statistics
 
 sys.path.append('..')
 
@@ -28,7 +29,7 @@ class DataBaseConnector():
             self.connection = psycopg2.connect(
                 user=self.username, password=self.password, host=self.host, port=self.port, database=self.database_name)
             self.cursor = self.connection.cursor()
-        except (Exception, psycopg2.Error) as error:
+        except psycopg2.Error as error:
             logging.error('Error while connecting to PostgreSQL')
             logging.error(error)
             raise Exception('Error while connecting to PostgreSQL', str(error))
@@ -48,7 +49,7 @@ class DataBaseConnector():
             logging.debug('Query finished successfully')
             if fetch:
                 return self.cursor.fetchall()
-        except (Exception, psycopg2.DatabaseError) as error:
+        except psycopg2.DatabaseError as error:
             logging.error('Error while running query: ' + sql)
             self.cursor.execute("ROLLBACK")
             self.connection.commit()
@@ -106,7 +107,7 @@ class PostgresStorage(BaseStorage):
             for segment in data.segments:
                 self._save_segment(segment)
             logging.info('Text data saved successfully')
-        except Exception as error:
+        except psycopg2.DatabaseError as error:
             logging.error('Failed to save text data')
             logging.error(error)
 
@@ -120,7 +121,7 @@ class PostgresStorage(BaseStorage):
             logging.info("Query executed in:  %s seconds" % (time.time() - start_time))
             logging.info('Query matched')
             return result
-        except Exception as error:
+        except psycopg2.DatabaseError as error:
             logging.error('Failed to match query')
             logging.error(error)
 
@@ -136,6 +137,22 @@ class PostgresStorage(BaseStorage):
 
             logging.info('Query matched')
             return result
-        except Exception as error:
+        except psycopg2.DatabaseError as error:
+            logging.error('Failed to match query')
+            logging.error(error)
+
+    def get_db_statistics(self):
+        try:
+            result = self.db_connector.execute_query(
+                get_db_statistics(), fetch=True)
+            return {
+                'gram_count': result[0][0],
+                'word_count': result[1][0],
+                'segment_count': result[2][0],
+                'gram_word_count': result[3][0],
+                'gram_segment_count': result[4][0],
+                'segment_word_count': result[5][0],
+            }
+        except psycopg2.DatabaseError as error:
             logging.error('Failed to match query')
             logging.error(error)

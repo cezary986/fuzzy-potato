@@ -1,5 +1,7 @@
-[] Napisać skrypt tworzący baze danych
-[] Napisać skrypt indeksujacy teskty
-[] Przetestować zapytania do bazy
+[X] Napisać skrypt tworzący baze danych
+[X] Napisać skrypt indeksujacy teskty
+[X] Przetestować zapytania do bazy
 [] Napisać proste w użyciu API
-[] Desktopowy klient Igor
+[] Desktopowy klient
+[] Zoptymalizowąć wstawianie tak żeby nie wstawiać kilkarazy tego samego
+[] zapamiętywać na jakiej pozycji (jakim słowie w segmencie) wystapił dany sufix

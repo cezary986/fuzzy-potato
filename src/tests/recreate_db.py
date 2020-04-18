@@ -27,7 +27,10 @@ with open('../../data/little_woman.txt', 'r') as myfile:
     text = myfile.read()
 
 text_data = TextDataFactory.make(text)
-
 print('Saving text data to db...')
+import time
+start_time = time.time()
 storage.save_data(text_data)
+print("Matched in:  %s seconds" % (time.time() - start_time))
+
 #

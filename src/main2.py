@@ -9,6 +9,8 @@ potato = FuzzyPotato(config={
             'database_name': 'fuzzy_kitten_test'
         })
 
+print(potato.get_db_statistics())
+
 print('write your query:')
 query = input()
 import time

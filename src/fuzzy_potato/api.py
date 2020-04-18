@@ -10,6 +10,9 @@ class FuzzyPotato(object):
     self.config = config
     self._storage = PostgresStorage(config)
 
+  def get_db_statistics(self):
+      return self._storage.get_db_statistics()
+
   def index_text(self, text: str):
     text_data = TextDataFactory.make(text)
     logging.info('Saving extracted text data to database')
@@ -74,22 +77,14 @@ class FuzzyPotato(object):
 
   def match_for_words(self, query: str, limit=10):
     self._validate_query(query)
-    query_grams = TextDataFactory._split_to_sufixes(query)
+    query_grams = TextDataFactory._split_to_sufixes(query.lower())
     result = self._storage.match_grams_for_words(query_grams, limit=limit)
     result = self._format_result(query, result)
     return self._sort_results(query, result)
 
   def match_for_segments(self, query: str, limit=10):
-    query_words = query.split(' ')
-    results = []
-    sufixes = []
-    for query_word in query_words:
-      if len(query_word) < 3:
-        continue
-      else:
-        sufixes.append(TextDataFactory._split_to_sufixes(query_word))
-
-    results = self._storage.match_grams_for_segments(sufixes, limit=limit)
-    results = self._format_result(query, results)
-    results = self._reduce_results(results)
-    return self._sort_results(query, results)
+    self._validate_query(query)
+    query_grams = TextDataFactory._split_to_sufixes(query.lower())
+    result = self._storage.match_grams_for_segments(query_grams, limit=limit)
+    result = self._format_result(query, result)
+    return result
