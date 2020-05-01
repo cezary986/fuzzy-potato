@@ -15,7 +15,7 @@ print('write your query:')
 query = input()
 import time
 start_time = time.time()
-results = potato.match_for_segments(query, limit=10)
+results = potato.match_for_words(query, limit=10)
 print("Matched in:  %s seconds" % (time.time() - start_time))
 print('Matches: ')
 import json

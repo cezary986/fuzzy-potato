@@ -5,13 +5,15 @@ class SearchResult(object):
 
 class GramData(object):
 
-  def __init__(self, text):
+  def __init__(self, text, word_position):
+    self.word_position = word_position # word position in segment
     self.text = text.replace("'", "''")
 
 
 class WordData(object):
 
-  def __init__(self, text):
+  def __init__(self, text: str, position: int):
+    self.position = position
     self.text = text.replace("'", "''")
     self.grams = {}
 
@@ -26,15 +28,7 @@ class SegmentData(object):
 
   def __init__(self, text):
     self.text = text.replace("'", "''")
-    self.words = {}
-
-  def add_word(self, word):
-    if word.text in self.words:
-      self.words[word.text].count += 1
-    else:
-      self.words[word.text] = word
-
-      
+    self.words = []
 
 
 class TextData(object):

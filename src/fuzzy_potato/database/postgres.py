@@ -5,12 +5,12 @@ import logging
 import time
 import psycopg2
 from .sql import create_db_sql, delete_data_sql, insert_gram_sql, insert_word_sql, insert_segment_sql, begin_insert, \
-    end_insert, fuzzy_match_words, fuzzy_match_segments, get_db_statistics
+    end_insert, fuzzy_match_words, fuzzy_match_segments, match_word_for_segments, get_db_statistics
 
 sys.path.append('..')
 
 
-class DataBaseConnector():
+class DataBaseConnector:
 
     def __init__(self):
         self.connection = None
@@ -35,7 +35,7 @@ class DataBaseConnector():
             raise Exception('Error while connecting to PostgreSQL', str(error))
 
     def disconnect(self):
-        if(self.connection):
+        if self.connection:
             self.cursor.close()
             self.connection.close()
             logging.info("Closing PostgreSQL connection")
@@ -87,16 +87,16 @@ class PostgresStorage(BaseStorage):
             logging.error(error)
 
     def _save_word(self, word):
-        sql = insert_word_sql(word.text)
+        sql = insert_word_sql(word.text, word.position)
         for key, gram in word.grams.items():
-            sql += insert_gram_sql(gram.text)
+            sql += insert_gram_sql(gram.text, gram.word_position)
         return sql
 
     def _save_segment(self, segment):
         sql = begin_insert()
         sql += insert_segment_sql(segment.text)
 
-        for key, word in segment.words.items():
+        for word in segment.words:
             sql += self._save_word(word)
 
         sql += end_insert()
@@ -104,9 +104,10 @@ class PostgresStorage(BaseStorage):
 
     def save_data(self, data):
         try:
-            for segment in data.segments:
+            maximum = len(data.segments)
+            for i, segment in enumerate(data.segments):
                 self._save_segment(segment)
-            logging.info('Text data saved successfully')
+                logging.info('Indexing progress: ' + str((i / maximum) * 100) + '%')
         except psycopg2.DatabaseError as error:
             logging.error('Failed to save text data')
             logging.error(error)
@@ -135,6 +136,16 @@ class PostgresStorage(BaseStorage):
 
             print("--- %s seconds ---" % (time.time() - start_time))
 
+            logging.info('Query matched')
+            return result
+        except psycopg2.DatabaseError as error:
+            logging.error('Failed to match query')
+            logging.error(error)
+
+    def match_words_for_segments(self, words, limit=10):
+        try:
+            result = self.db_connector.execute_query(
+                match_word_for_segments(words, limit), fetch=True)
             logging.info('Query matched')
             return result
         except psycopg2.DatabaseError as error:
