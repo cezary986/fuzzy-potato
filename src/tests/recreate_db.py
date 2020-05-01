@@ -3,7 +3,6 @@ import sys
 import  logging
 logging.basicConfig(level=logging.INFO)
 sys.path.insert(0, '..')
-from fuzzy_potato.database.sql import create_db_sql
 from fuzzy_potato.database.postgres import PostgresStorage
 from fuzzy_potato.text_processing import TextDataFactory
 
