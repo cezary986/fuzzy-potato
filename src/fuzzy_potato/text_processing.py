@@ -1,3 +1,4 @@
+from typing import Dict, List
 from nltk.tokenize import sent_tokenize
 import nltk
 from sys import getsizeof
@@ -11,8 +12,10 @@ from fuzzy_potato.core import TextData, SegmentData, WordData, GramData
 
 class TextDataFactory(object):
 
+    SUFIX_LENGTH = 3
+
     @classmethod
-    def _get_segments(cls, text):
+    def _get_segments(cls, text: str) -> List[SegmentData]:
         segments = sent_tokenize(text)
         segments_data = []
         for segment_text in segments:
@@ -20,7 +23,7 @@ class TextDataFactory(object):
         return segments_data
 
     @classmethod
-    def _segment_to_words(cls, segment_text):
+    def _segment_to_words(cls, segment_text: str) -> List[WordData]:
         words = nltk.word_tokenize(segment_text)
         words = [word.lower() for word in words if word.isalpha()]
         words_data = []
@@ -29,25 +32,24 @@ class TextDataFactory(object):
         return words_data
 
     @classmethod
-    def _split_to_sufixes(cls, word_text, word_position: int = None):
-        SUFIX_LENGTH = 3
+    def _split_to_sufixes(cls, word_text: str, word_position: int = None) -> Dict[str, GramData]:
         index_from = 0
         grams_data = {}
         for char in word_text:
             gram_text = ''
-            if index_from + SUFIX_LENGTH <= len(word_text):
-                gram_text = word_text[index_from: index_from + SUFIX_LENGTH]
-            if index_from + SUFIX_LENGTH - len(word_text) == 1:
+            if index_from + TextDataFactory.SUFIX_LENGTH <= len(word_text):
+                gram_text = word_text[index_from: index_from + TextDataFactory.SUFIX_LENGTH]
+            if index_from + TextDataFactory.SUFIX_LENGTH - len(word_text) == 1:
                 # last sufix is only two chars long with additional special char
-                gram_text = word_text[index_from: index_from + SUFIX_LENGTH] + '#'
-            if index_from + SUFIX_LENGTH - len(word_text) > 1:
+                gram_text = word_text[index_from: index_from + TextDataFactory.SUFIX_LENGTH] + '#'
+            if index_from + TextDataFactory.SUFIX_LENGTH - len(word_text) > 1:
                 break
             grams_data[gram_text] = GramData(gram_text, word_position)
             index_from = index_from + 1
         return grams_data
 
     @classmethod
-    def make(cls, text):
+    def make(cls, text: str) -> TextData:
         text_data = TextData()
         text_data.segments = TextDataFactory._get_segments(text)
         print(text_data.segments)

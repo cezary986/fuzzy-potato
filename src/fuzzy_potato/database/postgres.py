@@ -1,6 +1,7 @@
 
 import sys
-from fuzzy_potato.core import BaseStorage
+from typing import List
+from fuzzy_potato.core import BaseStorage, SegmentData, WordData, GramData, TextData
 import logging
 import time
 import psycopg2
@@ -15,8 +16,13 @@ class DataBaseConnector:
     def __init__(self):
         self.connection = None
         self.cursor = None
+        self.port = None
+        self.host = None
+        self.username = None
+        self.password = None
+        self.database_name = None
 
-    def connect(self, port, host, username, password, database_name):
+    def connect(self, port: str, host: str, username: str, password: str, database_name: str):
         self.port = port
         self.host = host
         self.username = username
@@ -40,7 +46,7 @@ class DataBaseConnector:
             self.connection.close()
             logging.info("Closing PostgreSQL connection")
 
-    def execute_query(self, sql, fetch=False):
+    def execute_query(self, sql: str, fetch=False):
         if self.connection.closed > 0:
             self._connect_self()
         try:
@@ -76,23 +82,26 @@ class PostgresStorage(BaseStorage):
         try:
             self.db_connector.execute_query(create_db_sql)
         except Exception as error:
-            logging.error('Failed to setup databse tables')
+            logging.error('Failed to setup database tables')
             logging.error(error)
+            raise error
 
     def drop_database(self):
         try:
             self.db_connector.execute_query(delete_data_sql)
         except Exception as error:
-            logging.error('Failed to setup databse tables')
+            logging.error('Failed to drop database tables')
             logging.error(error)
+            raise error
 
-    def _save_word(self, word):
+    @staticmethod
+    def _save_word(word: WordData):
         sql = insert_word_sql(word.text, word.position)
         for key, gram in word.grams.items():
             sql += insert_gram_sql(gram.text, gram.word_position)
         return sql
 
-    def _save_segment(self, segment):
+    def _save_segment(self, segment: SegmentData):
         sql = begin_insert()
         sql += insert_segment_sql(segment.text)
 
@@ -102,7 +111,7 @@ class PostgresStorage(BaseStorage):
         sql += end_insert()
         self.db_connector.execute_query(sql)
 
-    def save_data(self, data):
+    def save_data(self, data: TextData):
         try:
             maximum = len(data.segments)
             for i, segment in enumerate(data.segments):
@@ -111,8 +120,9 @@ class PostgresStorage(BaseStorage):
         except psycopg2.DatabaseError as error:
             logging.error('Failed to save text data')
             logging.error(error)
+            raise error
 
-    def match_grams_for_words(self, grams, limit=10):
+    def match_grams_for_words(self, grams: List[GramData], limit=10) -> list:
         try:
             start_time = time.time()
 
@@ -125,24 +135,19 @@ class PostgresStorage(BaseStorage):
         except psycopg2.DatabaseError as error:
             logging.error('Failed to match query')
             logging.error(error)
+            raise error
 
-    def match_grams_for_segments(self, grams, limit=10):
+    def match_grams_for_segments(self, grams: List[GramData], limit=10) -> list:
         try:
-            import time
-            start_time = time.time()
-
-            result = self.db_connector.execute_query(
-                fuzzy_match_segments(grams, limit), fetch=True)
-
-            print("--- %s seconds ---" % (time.time() - start_time))
-
+            result = self.db_connector.execute_query(fuzzy_match_segments(grams, limit), fetch=True)
             logging.info('Query matched')
             return result
         except psycopg2.DatabaseError as error:
             logging.error('Failed to match query')
             logging.error(error)
+            raise error
 
-    def match_words_for_segments(self, words, limit=10):
+    def match_words_for_segments(self, words: List[WordData], limit=10) -> list:
         try:
             result = self.db_connector.execute_query(
                 match_word_for_segments(words, limit), fetch=True)
@@ -152,7 +157,7 @@ class PostgresStorage(BaseStorage):
             logging.error('Failed to match query')
             logging.error(error)
 
-    def get_db_statistics(self):
+    def get_db_statistics(self) -> dict:
         try:
             result = self.db_connector.execute_query(
                 get_db_statistics(), fetch=True)
@@ -167,3 +172,4 @@ class PostgresStorage(BaseStorage):
         except psycopg2.DatabaseError as error:
             logging.error('Failed to match query')
             logging.error(error)
+            raise error

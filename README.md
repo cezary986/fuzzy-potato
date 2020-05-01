@@ -26,7 +26,7 @@ uses sufixes with a length of three characters. For example for word potato its 
 * ota
 * tat
 * ato
-* to$ - where $ is a symbol of the end of word
+* to# - where # is a symbol of the end of word
 
 ### Usage
 
